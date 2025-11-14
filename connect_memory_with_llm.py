@@ -1,114 +1,164 @@
-# import os
-# from langchain_huggingface import HuggingFaceEndpoint
-# from langchain_core.prompts import PromptTemplate
-# from langchain.chains import RetrievalQA
-# from langchain_huggingface import HuggingFaceEmbeddings
-# from langchain_community.vectorstores import FAISS
-# # Step 1: Setup LLM (Mistral 7B Instruct model with huggingface)
-
-# HF_TOKEN=os.environ.get("HF_TOKEN")
-# HUGGINGFACE_REPO_ID="mistralai/Mistral-7B-Instruct-v0.3"
-
-# def load_llm(huggingface_repo_id):
-#     llm = HuggingFaceEndpoint(
-#         repo_id=huggingface_repo_id,
-#         task="conversational",
-#         temperature=0.5,
-#         max_new_tokens=512,
-#         huggingfacehub_api_token=HF_TOKEN
-#     )
-#     return llm
-  
-# # Step 2: Connect LLM with FAISS vector database (created in create_memory_for_llm.py)
-
-# # this is a custom prompt template for Q&A , now this will be used in the chain ,this prompt will be passed to the LLM and the LLM will generate response based on this prompt.
-# # Context will be the relevant chunks retrieved from the FAISS vector db based on the user query and question will be the user query.
-# DB_FAISS_PATH = "vectorstore/db_faiss"
-# CUSTOM_PROMPT_TEMPLATE = """                                                                     
-# Use the pieces of information provided in the context to answer user's question.
-# If you dont know the answer, just say that you dont know, dont try to make up an answer. 
-# Dont provide anything out of the given context
-
-# Context: {context}
-# Question: {question}
-
-# Start the answer directly. No small talk please.
-# """
-
-# def set_custom_prompt_template(CUSTOM_PROMPT_TEMPLATE):
-#     prompt = PromptTemplate(
-#         template=CUSTOM_PROMPT_TEMPLATE,
-#         input_variables=["context", "question"]
-#     )
-#     return prompt
-
-# embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-# db = FAISS.load_local(DB_FAISS_PATH, embedding_model, allow_dangerous_deserialization=True)   # Load the FAISS vector db locally dangerous_deserialization= True is for safety and security by langchain.
-
-# # Step 3: Create Chain for Q&A
-# qa_chain = RetrievalQA.from_chain_type(
-#    llm=load_llm(HUGGINGFACE_REPO_ID),
-#     chain_type="stuff",
-#     retriever=db.as_retriever(search_kwargs={'k':3}),
-#     return_source_documents=True,
-#     chain_type_kwargs={'prompt':set_custom_prompt_template(CUSTOM_PROMPT_TEMPLATE)}
-# )
-
-# # Now invoke with a single query
-# user_query=input("Write Query Here: ")
-# response=qa_chain.invoke({'query': user_query})
-# print("RESULT: ", response["result"])
-# print("SOURCE DOCUMENTS: ", response["source_documents"])
-
+"""
+connect_memory_with_llm.py — Production Version
+Fully updated for LangChain v0.2+, no console prints, no interactive I/O.
+"""
 
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 from langchain_groq import ChatGroq
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 
-from langchain import hub
-from langchain.chains import create_retrieval_chain
+from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
-
-from dotenv import load_dotenv
-load_dotenv()
-
-# Step 1: Setup Groq LLM
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-GROQ_MODEL_NAME = "llama-3.1-8b-instant"  # Change to any supported Groq model
+from langchain.chains import create_retrieval_chain
 
 
-llm = ChatGroq(
-    model=GROQ_MODEL_NAME,
-    temperature=0.5,
-    max_tokens=512,
-    api_key=GROQ_API_KEY,
-)
+# ---------------- CONFIG ----------------
 
-
-# Step 2: Connect LLM with FAISS and Create chain
-
-# Load Database
 DB_FAISS_PATH = "vectorstore/db_faiss"
-embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-db = FAISS.load_local(DB_FAISS_PATH, embedding_model, allow_dangerous_deserialization=True)
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
+RETRIEVAL_K = 6
 
-# Step 3: Build RAG chain
-retrieval_qa_chat_prompt = hub.pull("langchain-ai/retrieval-qa-chat")
-
-# Document combiner chain (stuff documents into prompt)
-combine_docs_chain = create_stuff_documents_chain(llm, retrieval_qa_chat_prompt)
-
-# Retrieval chain (retriever + doc combiner)
-rag_chain = create_retrieval_chain(db.as_retriever(search_kwargs={'k': 3}), combine_docs_chain)
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+GROQ_MODEL_NAME = os.environ.get("GROQ_MODEL_NAME", "llama-3.1-8b-instant")
+GROQ_TEMPERATURE = float(os.environ.get("GROQ_TEMPERATURE", 0.3))
+GROQ_MAX_TOKENS = int(os.environ.get("GROQ_MAX_TOKENS", 512))
 
 
+# ---------------- EMERGENCY TRIAGE ----------------
 
-# Now invoke with a single query
-user_query=input("Write Query Here: ")
-response=rag_chain.invoke({'input': user_query})
-print("RESULT: ", response["answer"])
-print("\nSOURCE DOCUMENTS:")
-for doc in response["context"]:
-    print(f"- {doc.metadata} -> {doc.page_content[:200]}...")
+RED_FLAG_KEYWORDS = [
+    "chest pain", "shortness of breath", "loss of consciousness",
+    "severe bleeding", "uncontrolled bleeding", "sudden weakness",
+    "paralysis", "severe abdominal pain", "high fever",
+    "difficulty breathing", "blue lips", "struggling to breathe",
+]
+
+def contains_red_flag(text: str):
+    t = text.lower()
+    return any(flag in t for flag in RED_FLAG_KEYWORDS)
+
+
+# ---------------- PROMPT TEMPLATE ----------------
+
+PROMPT_TEMPLATE = """
+You are a careful medical AI assistant. Use ONLY the context provided.
+If the info is missing, say you don't have enough information.
+
+Format:
+1) One-line definition
+2) Symptoms (bulleted)
+3) Top 3 differential diagnoses
+4) Stepwise management
+5) Red flags
+6) Contraindications
+7) Questions to ask a doctor
+8) Sources
+
+IMPORTANT:
+- Do NOT hallucinate
+- Do NOT add content outside context
+- ALWAYS end with: "This information is educational only and does not replace professional medical advice."
+
+<context>
+{context}
+</context>
+
+Question: {input}
+"""
+
+prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
+
+
+# ---------------- LOADERS ----------------
+
+def load_llm():
+    if not GROQ_API_KEY:
+        raise ValueError("GROQ_API_KEY not set.")
+    return ChatGroq(
+        model=GROQ_MODEL_NAME,
+        temperature=GROQ_TEMPERATURE,
+        max_tokens=GROQ_MAX_TOKENS,
+        api_key=GROQ_API_KEY,
+    )
+
+
+def load_vectorstore():
+    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+    db = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
+    retriever = db.as_retriever(search_kwargs={"k": RETRIEVAL_K})
+    return retriever
+
+
+# ---------------- BUILD RAG CHAIN ----------------
+
+def build_rag_chain(llm, retriever):
+    doc_chain = create_stuff_documents_chain(llm, prompt)
+    return create_retrieval_chain(retriever, doc_chain)
+
+
+# ---------------- HELPERS ----------------
+
+def extract_sources(docs):
+    names = []
+    for d in docs:
+        src = d.metadata.get("source", "unknown")
+        names.append(os.path.basename(src))
+    return list(dict.fromkeys(names))
+
+
+def confidence_from_docs(docs):
+    n = len(docs)
+    if n >= 6: return "High"
+    if n >= 3: return "Medium"
+    return "Low"
+
+
+# ---------------- PUBLIC QUERY FUNCTION (USE THIS IN PRODUCTION) ----------------
+
+def run_query(user_query: str):
+    """
+    Main function: returns structured medical answer + metadata
+    """
+
+    # --- Emergency check ---
+    if contains_red_flag(user_query):
+        return {
+            "answer": "⚠ This query may indicate an emergency. Seek immediate medical care.",
+            "sources": [],
+            "confidence": "N/A",
+        }
+
+    llm = load_llm()
+    retriever = load_vectorstore()
+
+    docs = retriever.get_relevant_documents(user_query)
+    if not docs:
+        return {
+            "answer": "No matching medical information was found in the uploaded books.",
+            "sources": [],
+            "confidence": "Low",
+        }
+
+    rag_chain = build_rag_chain(llm, retriever)
+    response = rag_chain.invoke({"input": user_query})
+
+    answer_text = response.get("answer") or response.get("output_text") or ""
+    sources_list = extract_sources(docs)
+    confidence = confidence_from_docs(docs)
+
+    final_answer = (
+        answer_text
+        + f"\n\nSources: {', '.join(sources_list)}"
+        + f"\nConfidence: {confidence}"
+        + "\n\nNote: This information is educational only and does not replace professional medical advice."
+    )
+
+    return {
+        "answer": final_answer,
+        "sources": sources_list,
+        "confidence": confidence,
+    }
