@@ -1,6 +1,6 @@
 """
-connect_memory_with_llm.py — Production Version
-Fully updated for LangChain v0.2+, no console prints, no interactive I/O.
+connect_memory_with_llm.py — Production Version (ONLY FINAL ANSWER)
+No sources. No confidence. Clean output for Streamlit.
 """
 
 import os
@@ -43,32 +43,62 @@ def contains_red_flag(text: str):
 
 
 # ---------------- PROMPT TEMPLATE ----------------
-
 PROMPT_TEMPLATE = """
-You are a careful medical AI assistant. Use ONLY the context provided.
-If the info is missing, say you don't have enough information.
+You are a STRICT retrieval-only medical assistant.
 
-Format:
-1) One-line definition
-2) Symptoms (bulleted)
-3) Top 3 differential diagnoses
-4) Stepwise management
-5) Red flags
-6) Contraindications
-7) Questions to ask a doctor
-8) Sources
+RULES (IMPORTANT):
+- You MUST use ONLY the information found in the provided context.
+- If the user asks something that is NOT in the context, reply:
+  "The provided medical books do not contain this information."
+- You MUST NOT add external medical knowledge, treatments, pathogens, or assumptions.
+- NO guessing. NO hallucination.
+- NO home remedies, no homeopathy, no herbs, no oxygen therapy unless explicitly in the context.
+- If symptoms do not match any conditions in context, say so.
 
-IMPORTANT:
-- Do NOT hallucinate
-- Do NOT add content outside context
-- ALWAYS end with: "This information is educational only and does not replace professional medical advice."
+-----------------------------------------------
+
+Your output MUST follow this structure:
+
+1) **Expanded Definition**
+   - Rewrite the definition using MORE descriptive, simple language.
+   - Use only the meaning found in the context.
+   - You may expand or clarify the ideas, but you must NOT add facts not supported by the text.
+
+2) **Symptoms (ONLY from context)**
+
+3) **Possible Conditions Based on User Symptoms (ONLY if symptoms appear in context)**  
+   - Match symptoms to conditions from the books only.
+   - If symptoms do not appear in context, say:
+     "The books do not contain enough information to match these symptoms."
+
+4) **Top 3 Differential Diagnoses (ONLY from context)**
+
+5) **Stepwise Management (ONLY if described in context)**  
+   - If management is not discussed in context:
+     “The provided books do not describe management steps for this condition.”
+
+6) **Red Flags (ONLY if present in the context)**
+
+-----------------------------------------------
 
 <context>
 {context}
 </context>
 
-Question: {input}
+User Question: {input}
+
+-----------------------------------------------
+
+REMEMBER:
+If ANY part of the answer is not present in the context, you MUST explicitly say:
+"The provided medical books do not contain this information."
+
+Always end with:
+"This information is educational only and does not replace professional medical advice."
 """
+
+
+
 
 prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
 
@@ -100,65 +130,36 @@ def build_rag_chain(llm, retriever):
     return create_retrieval_chain(retriever, doc_chain)
 
 
-# ---------------- HELPERS ----------------
-
-def extract_sources(docs):
-    names = []
-    for d in docs:
-        src = d.metadata.get("source", "unknown")
-        names.append(os.path.basename(src))
-    return list(dict.fromkeys(names))
-
-
-def confidence_from_docs(docs):
-    n = len(docs)
-    if n >= 6: return "High"
-    if n >= 3: return "Medium"
-    return "Low"
-
-
-# ---------------- PUBLIC QUERY FUNCTION (USE THIS IN PRODUCTION) ----------------
+# ---------------- MAIN PRODUCTION FUNCTION (ONLY FINAL ANSWER) ----------------
 
 def run_query(user_query: str):
     """
-    Main function: returns structured medical answer + metadata
+    Main function: returns the *formatted medical answer* only.
+    No confidence. No sources. Only final answer.
     """
 
-    # --- Emergency check ---
+    # Emergency triage
     if contains_red_flag(user_query):
-        return {
-            "answer": "⚠ This query may indicate an emergency. Seek immediate medical care.",
-            "sources": [],
-            "confidence": "N/A",
-        }
+        return "⚠ This query may indicate an emergency. Seek immediate medical care."
 
+    # Load LLM + vectorstore
     llm = load_llm()
     retriever = load_vectorstore()
 
     docs = retriever.get_relevant_documents(user_query)
     if not docs:
-        return {
-            "answer": "No matching medical information was found in the uploaded books.",
-            "sources": [],
-            "confidence": "Low",
-        }
+        return "No matching medical information was found in the uploaded books."
 
+    # Run the RAG pipeline
     rag_chain = build_rag_chain(llm, retriever)
     response = rag_chain.invoke({"input": user_query})
 
     answer_text = response.get("answer") or response.get("output_text") or ""
-    sources_list = extract_sources(docs)
-    confidence = confidence_from_docs(docs)
 
+    # Ensure disclaimer is added
     final_answer = (
-        answer_text
-        + f"\n\nSources: {', '.join(sources_list)}"
-        + f"\nConfidence: {confidence}"
-        + "\n\nNote: This information is educational only and does not replace professional medical advice."
+        answer_text +
+        "\n\nNote: This information is educational only and does not replace professional medical advice."
     )
 
-    return {
-        "answer": final_answer,
-        "sources": sources_list,
-        "confidence": confidence,
-    }
+    return final_answer
