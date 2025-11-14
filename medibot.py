@@ -1,4 +1,6 @@
 import os
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
+
 import streamlit as st
 
 from langchain_huggingface import HuggingFaceEmbeddings
