@@ -14,7 +14,7 @@ __pycache__/
 .env
 
 # Vector store data (large files)
-vectorstore/
+# vectorstore/
 
 # IDE files
 .vscode/
