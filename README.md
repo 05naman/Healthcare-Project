@@ -1,210 +1,120 @@
-# Healthcare Symptom Checker Chatbot 🏥🤖
+# Healthcare Symptom Checker Chatbot
 
-An intelligent healthcare symptom checker chatbot built using **Streamlit**, **LangChain**, **FAISS**, and **Groq LLM**. This application uses Retrieval-Augmented Generation (RAG) to provide accurate healthcare information based on medical documents.
+A sophisticated healthcare symptom checker chatbot built with RAG (Retrieval-Augmented Generation) technology. This application uses medical textbooks as a knowledge base to provide educational information about symptoms, conditions, and medical management. The chatbot leverages Groq LLM, FAISS vector database, and Streamlit for an interactive user interface.
 
-## 🌟 Features
+## 🎯 Project Overview
 
-- **Interactive Chat Interface**: Built with Streamlit for a user-friendly experience
-- **RAG Implementation**: Combines document retrieval with Large Language Model responses
-- **FAISS Vector Database**: Fast similarity search for medical information
-- **Groq LLM Integration**: Uses Llama-3.1-8b-instant model for natural language processing
-- **PDF Document Processing**: Automatically processes medical PDFs to create knowledge base
-- **Session Memory**: Maintains conversation history during the session
+This project is an **educational medical information assistant** that helps users understand medical conditions, symptoms, and treatments based on authoritative medical textbooks. It uses advanced AI techniques to retrieve relevant information from medical literature and present it in an easy-to-understand format.
+
+
+## ✨ Features
+
+- **RAG-Powered Responses**: Uses Retrieval-Augmented Generation to provide accurate answers based on medical textbooks
+- **Emergency Triage Detection**: Automatically detects emergency-related keywords and prompts users to seek immediate medical care
+- **Structured Medical Information**: Provides organized responses including:
+  - Expanded definitions
+  - Symptoms
+  - Possible conditions
+  - Differential diagnoses
+  - Stepwise management
+  - Red flags
+- **Interactive Web Interface**: User-friendly Streamlit-based chat interface
+- **Fast Vector Search**: FAISS-based semantic search for quick information retrieval
+- **Strict Retrieval-Only Mode**: Only provides information found in the uploaded medical books, preventing hallucinations
 
 ## 🏗️ Architecture
 
-```
-📁 Project Structure
-├── medibot.py                    # Main Streamlit application
-├── create_memory_for_llm.py      # Script to create FAISS vector store from PDFs
-├── connect_memory_with_llm.py    # Console-based Q&A interface
-├── data/                         # Directory for PDF medical documents
-├── vectorstore/                  # FAISS vector database (generated)
-├── requirements.txt              # Python dependencies
-├── pyproject.toml               # Project configuration (UV/Poetry)
-├── .env                         # Environment variables (not tracked)
-└── README.md                    # This file
-```
+The project follows a three-stage architecture:
 
-## 🚀 Quick Start
+### 1. **Data Processing Stage** (`create_memory_for_llm.py`)
+   - Loads PDF medical textbooks from the `data/` directory
+   - Splits documents into chunks with overlap for better context preservation
+   - Creates embeddings using HuggingFace sentence transformers
+   - Builds and saves a FAISS vector database
 
-### Prerequisites
+### 2. **RAG Pipeline** (`connect_memory_with_llm.py`)
+   - Loads the pre-built FAISS vectorstore
+   - Retrieves relevant document chunks based on user queries
+   - Uses Groq LLM to generate responses based on retrieved context
+   - Implements emergency triage detection
+   - Enforces strict retrieval-only responses
 
-- Python 3.8+
-- Groq API Key ([Get one here](https://console.groq.com/))
-- UV package manager (recommended) or pip
+### 3. **User Interface** (`medibot.py`)
+   - Streamlit-based web application
+   - Chat interface for user interactions
+   - Caches vectorstore for performance
+   - Displays conversation history
 
-### Installation
+## 📋 Prerequisites
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/HealthCare_Symptom_Checker_Chatbot_Embedded_Solutions.git
-   cd HealthCare_Symptom_Checker_Chatbot_Embedded_Solutions
-   ```
+- **Python**: 3.9 or higher (3.12 recommended)
+- **Groq API Key**: Get your free API key from [Groq Console](https://console.groq.com/)
+- **Medical PDFs**: Place medical textbook PDFs in the `data/` directory
 
-2. **Set up virtual environment**
-   
-   Using UV (recommended):
-   ```bash
-   uv venv
-   uv pip sync requirements.txt
-   ```
-   
-   Or using traditional pip:
-   ```bash
-   python -m venv .venv
-   # On Windows:
-   .venv\Scripts\activate
-   # On macOS/Linux:
-   source .venv/bin/activate
-   
-   pip install -r requirements.txt
-   ```
 
-3. **Set up environment variables**
-   
-   Create a `.env` file in the project root:
-   ```env
-   GROQ_API_KEY=your_groq_api_key_here
-   ```
-
-4. **Prepare your medical documents**
-   
-   - Place your PDF medical documents in the `data/` directory
-   - Run the memory creation script:
-   ```bash
-   python create_memory_for_llm.py
-   ```
-   This will process the PDFs and create the FAISS vector database.
-
-5. **Run the application**
-   ```bash
-   streamlit run medibot.py
-   ```
-
-## 💻 Usage
-
-### Web Interface (Recommended)
-
-1. Start the Streamlit app: `streamlit run medibot.py`
-2. Open your browser to `http://localhost:8501`
-3. Type your health-related questions in the chat interface
-4. Get AI-powered responses based on your medical document knowledge base
-
-### Console Interface
-
-For command-line usage:
-```bash
-python connect_memory_with_llm.py
-```
 
 ## 🔧 Configuration
 
-### Supported Models
-
-The application uses Groq's Llama-3.1-8b-instant model by default. You can change this in the code:
-
-```python
-GROQ_MODEL_NAME = "llama-3.1-8b-instant"  # or other supported models
-```
-
 ### Embedding Model
 
-The project uses `sentence-transformers/all-MiniLM-L6-v2` for creating document embeddings. This provides a good balance of performance and quality.
+The default embedding model is `sentence-transformers/all-mpnet-base-v2`. To change it, modify the `EMBEDDING_MODEL_NAME` variable in:
+- `create_memory_for_llm.py` (for building the vectorstore)
+- `connect_memory_with_llm.py` (for querying)
 
-### Document Processing Parameters
+### Chunking Parameters
 
-- **Chunk Size**: 500 characters
-- **Chunk Overlap**: 50 characters
-- **Retrieval K**: 3 most similar documents
+Adjust chunk size and overlap in `create_memory_for_llm.py`:
 
-## 📋 Dependencies
+```python
+CHUNK_SIZE = 1200      # Characters per chunk
+CHUNK_OVERLAP = 200    # Overlap between chunks
+```
 
-### Core Libraries
-- `streamlit` - Web interface
-- `langchain` - LLM framework
-- `langchain-groq` - Groq integration
-- `langchain-huggingface` - HuggingFace embeddings
-- `langchain-community` - Community extensions
-- `faiss-cpu` - Vector similarity search
-- `python-dotenv` - Environment variable management
-- `pypdf` - PDF processing
+### Retrieval Parameters
 
-### Full requirements
-See `requirements.txt` for the complete list of dependencies.
+Modify the number of retrieved documents in `connect_memory_with_llm.py`:
 
-## ⚠️ Important Notes
+```python
+RETRIEVAL_K = 6  # Number of document chunks to retrieve
+```
 
-1. **Medical Disclaimer**: This chatbot is for informational purposes only and should not replace professional medical advice.
+### LLM Configuration
 
-2. **API Keys**: Keep your Groq API key secure and never commit it to version control.
+Adjust Groq LLM settings in your `.env` file or `connect_memory_with_llm.py`:
 
-3. **Document Quality**: The quality of responses depends on the medical documents you provide in the `data/` directory.
+- `GROQ_MODEL_NAME`: Model to use (default: `llama-3.1-8b-instant`)
+- `GROQ_TEMPERATURE`: Response creativity (0.0-1.0, default: 0.3)
+- `GROQ_MAX_TOKENS`: Maximum response length (default: 512)
 
-4. **Vector Store**: The `vectorstore/` directory contains processed embeddings and can be large. It's excluded from git by default.
+## 🛠️ Technologies Used
 
-## 🛠️ Development
+- **Streamlit**: Web application framework
+- **LangChain**: LLM orchestration and RAG pipeline
+- **Groq**: Fast LLM inference API
+- **FAISS**: Vector similarity search (Facebook AI Similarity Search)
+- **HuggingFace**: Embedding models and transformers
+- **PyPDF**: PDF document processing
+- **Python-dotenv**: Environment variable management
 
-### Adding New Documents
+## 🔍 How It Works
 
-1. Place new PDF files in the `data/` directory
-2. Run `python create_memory_for_llm.py` to update the vector database
-3. Restart the Streamlit application
+1. **Document Processing**:
+   - PDFs are loaded and split into manageable chunks
+   - Each chunk is embedded into a high-dimensional vector space
+   - Vectors are stored in FAISS for fast similarity search
 
-### Customizing the Prompt
+2. **Query Processing**:
+   - User query is embedded using the same model
+   - FAISS searches for the most similar document chunks
+   - Top K chunks are retrieved as context
 
-The application uses LangChain's built-in retrieval-qa-chat prompt. You can customize it by modifying the prompt template in the code.
+3. **Response Generation**:
+   - Retrieved chunks are passed to Groq LLM with a structured prompt
+   - LLM generates a response based ONLY on the provided context
+   - Response is formatted and displayed to the user
 
-### Environment Setup for Development
+4. **Safety Features**:
+   - Emergency keyword detection triggers immediate medical advice
+   - Strict retrieval-only mode prevents hallucination
+   - Medical disclaimers are automatically appended
 
-The project uses UV for dependency management. Key files:
-- `pyproject.toml` - Project metadata and dependencies
-- `uv.lock` - Lock file for reproducible installs
-- `.python-version` - Python version specification
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **"Failed to load the vector store"**
-   - Ensure you've run `create_memory_for_llm.py` first
-   - Check that PDF files exist in the `data/` directory
-
-2. **Groq API Errors**
-   - Verify your API key is correct in the `.env` file
-   - Check your Groq API quota and rate limits
-
-3. **Memory/Performance Issues**
-   - Consider reducing the chunk size or number of retrieved documents
-   - Monitor RAM usage, especially with large document collections
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- **LangChain** - For the excellent LLM framework
-- **Groq** - For fast LLM inference
-- **Streamlit** - For the intuitive web framework
-- **FAISS** - For efficient vector similarity search
-- **HuggingFace** - For the embedding models
-
-## 📞 Support
-
-If you encounter any issues or have questions:
-1. Check the troubleshooting section above
-2. Search existing GitHub issues
-3. Create a new issue with detailed information about your problem
-
----
-
-**⚕️ Remember**: This tool is designed to assist with health information queries but should never replace professional medical consultation.
