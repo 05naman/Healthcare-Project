@@ -164,6 +164,7 @@ def run_query(user_query: str):
 
     docs = retriever.invoke(user_query)
 
+
     if not docs:
         return "No matching medical information was found in the uploaded books."
 
