@@ -162,7 +162,8 @@ def run_query(user_query: str):
     llm = load_llm()
     retriever = load_vectorstore()
 
-    docs = retriever.get_relevant_documents(user_query)
+    docs = retriever.invoke(user_query)
+
     if not docs:
         return "No matching medical information was found in the uploaded books."
 
